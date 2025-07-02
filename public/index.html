@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Менеджер сайтов</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .connection-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 2em;
+            margin-bottom: 5px;
+            color: #667eea;
+        }
+
+        .stat-card p {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            min-width: 250px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            background: white;
+            color: #7f8c8d;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            position: relative;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .tab-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            min-height: 400px;
+        }
+
+        /* Пагинация */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+
+        .pagination-info {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin: 0 15px;
+        }
+
+        .page-btn {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            color: #7f8c8d;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .page-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .page-size-selector select {
+            padding: 6px 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .site-item {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .site-item:hover {
+            border-color: #e0e0e0;
+            transform: translateX(5px);
+        }
+
+        .site-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .site-info {
+            flex: 1;
+        }
+
+        .site-name {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .site-id {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            font-family: monospace;
+        }
+
+        .site-url {
+            color: #3498db;
+            text-decoration: none;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+
+        .site-url:hover {
+            text-decoration: underline;
+        }
+
+        .prefix-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-right: 5px;
+            color: white;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .action-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn-comment {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-2fa {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-good {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-archive {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .comment-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #ecf0f1;
+            border-radius: 10px;
+        }
+
+        .credentials-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #ffeaa7;
+            border-radius: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #2c3e50;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .prefix-manager {
+            margin-top: 20px;
+        }
+
+        .prefix-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .color-picker {
+            width: 50px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #95a5a6;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease;
+            z-index: 2000;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+            }
+            to {
+                transform: translateX(0);
+            }
+        }
+
+        .notification.success {
+            border-left: 4px solid #27ae60;
+        }
+
+        .notification.error {
+            border-left: 4px solid #e74c3c;
+        }
+
+        .notification.info {
+            border-left: 4px solid #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Менеджер сайтов</h1>
+            <p>Система управления базой данных финансовых учреждений</p>
+            <div class="connection-status status-disconnected" id="connectionStatus">
+                ⚡ Подключение...
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3 id="totalCount">0</h3>
+                <p>Всего сайтов</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="generalCount">0</h3>
+                <p>Общий список</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="2faCount">0</h3>
+                <p>С 2FA</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="goodCount">0</h3>
+                <p>Хорошие сайты</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="archiveCount">0</h3>
+                <p>В архиве</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="search-container">
+                <input type="text" class="search-input" id="searchInput" placeholder="Поиск по ID, названию или URL...">
+                <button class="btn btn-primary" onclick="showImportModal()">Загрузить данные</button>
+                <button class="btn btn-primary" onclick="showPrefixModal()">Управление префиксами</button>
+            </div>
+            <div class="page-size-selector">
+                <label>Показывать по:</label>
+                <select id="pageSizeSelect" onchange="changePageSize()">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <span>записей на странице</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('general')">
+                Общий список
+                <span class="tab-badge" id="generalBadge">0</span>
+            </div>
+            <div class="tab" onclick="switchTab('2fa')">
+                2FA
+                <span class="tab-badge" id="2faBadge">0</span>
+            </div>
+            <div class="tab" onclick="switchTab('good')">
+                Хорошие сайты
+                <span class="tab-badge" id="goodBadge">0</span>
+            </div>
+            <div class="tab" onclick="switchTab('archive')">
+                Архив
+                <span class="tab-badge" id="archiveBadge">0</span>
+            </div>
+        </div>
+
+        <div class="content" id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка данных...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для импорта -->
+    <div class="modal" id="importModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Импорт данных</h2>
+            </div>
+            <div class="form-group">
+                <label>Выберите файл .txt или вставьте содержимое:</label>
+                <input type="file" id="fileInput" accept=".txt" style="margin-bottom: 10px;">
+                <textarea id="importTextarea" placeholder="Или вставьте содержимое файла здесь..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeImportModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="importData()">Импортировать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для префиксов -->
+    <div class="modal" id="prefixModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Управление префиксами</h2>
+            </div>
+            <div class="prefix-manager" id="prefixManager">
+                <!-- Префиксы будут добавлены через JS -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="addNewPrefix()">Добавить префикс</button>
+                <button class="btn" onclick="closePrefixModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для комментариев -->
+    <div class="modal" id="commentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Комментарий модератора</h2>
+            </div>
+            <div class="form-group">
+                <textarea id="commentTextarea" placeholder="Введите комментарий..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeCommentModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveComment()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для учетных данных -->
+    <div class="modal" id="credentialsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Тестовые учетные данные</h2>
+            </div>
+            <div class="form-group">
+                <label>Логин:</label>
+                <input type="text" id="credentialsLogin" placeholder="Введите логин">
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="text" id="credentialsPassword" placeholder="Введите пароль">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeCredentialsModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveCredentials()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Глобальные переменные
+        let allSites = []; // Все сайты для текущей вкладки
+        let filteredSites = []; // Отфильтрованные сайты
+        let currentPage = 1;
+        let pageSize = 10;
+        let prefixes = {};
+        let currentTab = 'general';
+        let searchTerm = '';
+        let socket;
+        let currentEditingSiteId = null;
+        let API_URL = window.location.origin;
+
+        // Инициализация Socket.IO
+        function initializeSocket() {
+            socket = io();
+
+            socket.on('connect', () => {
+                console.log('Подключено к серверу');
+                updateConnectionStatus(true);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Отключено от сервера');
+                updateConnectionStatus(false);
+            });
+
+            socket.on('sitesUpdated', () => {
+                console.log('Сайты обновлены');
+                loadSites();
+                loadStats();
+            });
+
+            socket.on('siteUpdated', (data) => {
+                console.log('Сайт обновлен', data);
+                loadSites();
+                loadStats();
+            });
+
+            socket.on('prefixesUpdated', () => {
+                console.log('Префиксы обновлены');
+                loadPrefixes();
+            });
+        }
+
+        // Обновление статуса подключения
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'connection-status status-connected';
+                status.textContent = '✅ Подключено';
+            } else {
+                status.className = 'connection-status status-disconnected';
+                status.textContent = '❌ Отключено';
+            }
+        }
+
+        // Загрузка сайтов с пагинацией
+        async function loadSites() {
+            try {
+                // Используем оптимизированный endpoint если доступен
+                const response = await fetch(`${API_URL}/api/sites/by-status/${currentTab}?limit=1000`);
+                
+                if (!response.ok) {
+                    // Fallback на старый endpoint
+                    const fallbackResponse = await fetch(`${API_URL}/api/sites`);
+                    const allData = await fallbackResponse.json();
+                    allSites = allData.filter(site => site.status === currentTab);
+                } else {
+                    const data = await response.json();
+                    allSites = data.sites || [];
+                }
+                
+                applyFiltersAndDisplay();
+            } catch (error) {
+                console.error('Ошибка загрузки сайтов:', error);
+                showNotification('Ошибка загрузки данных', 'error');
+            }
+        }
+
+        // Применение фильтров и отображение
+        function applyFiltersAndDisplay() {
+            // Фильтрация по поиску
+            if (searchTerm) {
+                filteredSites = allSites.filter(site => 
+                    site.siteId.toString().includes(searchTerm) ||
+                    site.name.toLowerCase().includes(searchTerm) ||
+                    site.url.toLowerCase().includes(searchTerm)
+                );
+            } else {
+                filteredSites = [...allSites];
+            }
+            
+            // Сброс на первую страницу при новом поиске
+            if (searchTerm !== '') {
+                currentPage = 1;
+            }
+            
+            updateDisplay();
+        }
+
+        // Обновление отображения с пагинацией
+        function updateDisplay() {
+            const content = document.getElementById('content');
+            
+            if (filteredSites.length === 0) {
+                content.innerHTML = `
+                    <div class="empty-state">
+                        <h3>${searchTerm ? 'Ничего не найдено' : 'Нет сайтов в этой категории'}</h3>
+                        <p>${searchTerm ? 'Попробуйте изменить критерии поиска' : 'Переместите сайты в эту категорию для отображения'}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Вычисляем пагинацию
+            const totalPages = Math.ceil(filteredSites.length / pageSize);
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const pageSites = filteredSites.slice(startIndex, endIndex);
+            
+            // Отображаем сайты
+            let html = pageSites.map(site => createSiteCard(site)).join('');
+            
+            // Добавляем пагинацию
+            html += createPagination(totalPages, filteredSites.length);
+            
+            content.innerHTML = html;
+        }
+
+        // Создание элементов пагинации
+        function createPagination(totalPages, totalItems) {
+            if (totalPages <= 1) return '';
+            
+            let html = '<div class="pagination">';
+            
+            // Кнопка "Предыдущая"
+            html += `<button class="page-btn" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>←</button>`;
+            
+            // Номера страниц
+            const maxButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+            
+            if (startPage > 1) {
+                html += `<button class="page-btn" onclick="changePage(1)">1</button>`;
+                if (startPage > 2) {
+                    html += `<span style="color: #7f8c8d;">...</span>`;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += `<span style="color: #7f8c8d;">...</span>`;
+                }
+                html += `<button class="page-btn" onclick="changePage(${totalPages})">${totalPages}</button>`;
+            }
+            
+            // Кнопка "Следующая"
+            html += `<button class="page-btn" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>→</button>`;
+            
+            // Информация о записях
+            const startItem = (currentPage - 1) * pageSize + 1;
+            const endItem = Math.min(currentPage * pageSize, totalItems);
+            html += `<div class="pagination-info">Показано ${startItem}-${endItem} из ${totalItems}</div>`;
+            
+            html += '</div>';
+            
+            return html;
+        }
+
+        // Изменение страницы
+        function changePage(page) {
+            const totalPages = Math.ceil(filteredSites.length / pageSize);
+            if (page >= 1 && page <= totalPages) {
+                currentPage = page;
+                updateDisplay();
+                // Прокручиваем к началу контента
+                document.querySelector('.content').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        // Изменение размера страницы
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            currentPage = 1;
+            updateDisplay();
+        }
+
+        // Загрузка префиксов
+        async function loadPrefixes() {
+            try {
+                const response = await fetch(`${API_URL}/api/prefixes`);
+                const prefixArray = await response.json();
+                prefixes = {};
+                prefixArray.forEach(p => {
+                    prefixes[p.name] = p.color;
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки префиксов:', error);
+            }
+        }
+
+        // Загрузка статистики
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_URL}/api/stats`);
+                const stats = await response.json();
+                
+                document.getElementById('totalCount').textContent = stats.total;
+                document.getElementById('generalCount').textContent = stats.general;
+                document.getElementById('2faCount').textContent = stats['2fa'];
+                document.getElementById('goodCount').textContent = stats.good;
+                document.getElementById('archiveCount').textContent = stats.archive;
+                
+                document.getElementById('generalBadge').textContent = stats.general;
+                document.getElementById('2faBadge').textContent = stats['2fa'];
+                document.getElementById('goodBadge').textContent = stats.good;
+                document.getElementById('archiveBadge').textContent = stats.archive;
+            } catch (error) {
+                console.error('Ошибка загрузки статистики:', error);
+            }
+        }
+
+        // Переключение вкладок
+        function switchTab(tab) {
+            currentTab = tab;
+            currentPage = 1; // Сброс на первую страницу
+            searchTerm = ''; // Очистка поиска
+            document.getElementById('searchInput').value = '';
+            
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.closest('.tab').classList.add('active');
+            
+            loadSites();
+        }
+
+        // Поиск с debounce
+        let searchTimeout;
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            searchTerm = e.target.value.toLowerCase();
+            
+            // Отменяем предыдущий таймер
+            clearTimeout(searchTimeout);
+            
+            // Устанавливаем новый таймер
+            searchTimeout = setTimeout(() => {
+                applyFiltersAndDisplay();
+            }, 300); // Задержка 300мс
+        });
+
+        // Создание карточки сайта
+        function createSiteCard(site) {
+            const prefixHtml = site.prefix ? 
+                `<span class="prefix-badge" style="background: ${prefixes[site.prefix] || '#95a5a6'};">${site.prefix}</span>` : '';
+            
+            const commentHtml = site.comment ? 
+                `<div class="comment-section">
+                    <strong>Комментарий модератора:</strong><br>
+                    ${site.comment}
+                </div>` : '';
+            
+            const credentialsHtml = (site.status === '2fa' && (site.credentials.login || site.credentials.password)) ? 
+                `<div class="credentials-section">
+                    <strong>Тестовые данные:</strong><br>
+                    Логин: ${site.credentials.login || 'Не указан'}<br>
+                    Пароль: ${site.credentials.password || 'Не указан'}
+                </div>` : '';
+            
+            return `
+                <div class="site-item">
+                    <div class="site-header">
+                        <div class="site-info">
+                            <div class="site-name">
+                                ${prefixHtml}
+                                ${site.name}
+                            </div>
+                            <div class="site-id">ID: ${site.siteId}</div>
+                            ${site.url ? `<a href="${site.url}" target="_blank" class="site-url">${site.url}</a>` : ''}
+                        </div>
+                    </div>
+                    ${commentHtml}
+                    ${credentialsHtml}
+                    <div class="actions">
+                        <button class="action-btn btn-comment" onclick="showCommentModal(${site.siteId})">
+                            ${site.comment ? 'Изменить' : 'Добавить'} комментарий
+                        </button>
+                        ${site.status !== '2fa' ? 
+                            `<button class="action-btn btn-2fa" onclick="moveSite(${site.siteId}, '2fa')">В 2FA</button>` : 
+                            `<button class="action-btn btn-comment" onclick="showCredentialsModal(${site.siteId})">Добавить данные</button>`
+                        }
+                        ${site.status !== 'good' ? 
+                            `<button class="action-btn btn-good" onclick="moveSite(${site.siteId}, 'good')">Хороший сайт</button>` : 
+                            `<button class="action-btn btn-comment" onclick="selectPrefix(${site.siteId})">Добавить префикс</button>`
+                        }
+                        ${site.status !== 'archive' ? 
+                            `<button class="action-btn btn-archive" onclick="moveSite(${site.siteId}, 'archive')">В архив</button>` : 
+                            `<button class="action-btn btn-good" onclick="moveSite(${site.siteId}, 'general')">Восстановить</button>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+        // Перемещение сайта
+        async function moveSite(siteId, newStatus) {
+            try {
+                const response = await fetch(`${API_URL}/api/sites/${siteId}/move`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                if (response.ok) {
+                    showNotification('Сайт перемещен', 'success');
+                }
+            } catch (error) {
+                console.error('Ошибка перемещения сайта:', error);
+                showNotification('Ошибка при перемещении', 'error');
+            }
+        }
+
+        // Работа с комментариями
+        function showCommentModal(siteId) {
+            currentEditingSiteId = siteId;
+            const site = allSites.find(s => s.siteId === siteId);
+            document.getElementById('commentTextarea').value = site?.comment || '';
+            document.getElementById('commentModal').style.display = 'flex';
+        }
+
+        function closeCommentModal() {
+            document.getElementById('commentModal').style.display = 'none';
+            currentEditingSiteId = null;
+        }
+
+        async function saveComment() {
+            const comment = document.getElementById('commentTextarea').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/sites/${currentEditingSiteId}/comment`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ comment })
+                });
+                
+                if (response.ok) {
+                    showNotification('Комментарий сохранен', 'success');
+                    closeCommentModal();
+                }
+            } catch (error) {
+                console.error('Ошибка сохранения комментария:', error);
+                showNotification('Ошибка при сохранении', 'error');
+            }
+        }
+
+        // Работа с учетными данными
+        function showCredentialsModal(siteId) {
+            currentEditingSiteId = siteId;
+            const site = allSites.find(s => s.siteId === siteId);
+            document.getElementById('credentialsLogin').value = site?.credentials?.login || '';
+            document.getElementById('credentialsPassword').value = site?.credentials?.password || '';
+            document.getElementById('credentialsModal').style.display = 'flex';
+        }
+
+        function closeCredentialsModal() {
+            document.getElementById('credentialsModal').style.display = 'none';
+            currentEditingSiteId = null;
+        }
+
+        async function saveCredentials() {
+            const login = document.getElementById('credentialsLogin').value;
+            const password = document.getElementById('credentialsPassword').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/sites/${currentEditingSiteId}/credentials`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login, password })
+                });
+                
+                if (response.ok) {
+                    showNotification('Учетные данные сохранены', 'success');
+                    closeCredentialsModal();
+                }
+            } catch (error) {
+                console.error('Ошибка сохранения учетных данных:', error);
+                showNotification('Ошибка при сохранении', 'error');
+            }
+        }
+
+        // Выбор префикса
+        async function selectPrefix(siteId) {
+            const site = allSites.find(s => s.siteId === siteId);
+            const prefixList = Object.keys(prefixes);
+            const prefix = prompt(`Выберите префикс (${prefixList.join(', ')}):`, site?.prefix || '');
+            
+            if (prefix !== null) {
+                try {
+                    const response = await fetch(`${API_URL}/api/sites/${siteId}/prefix`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prefix })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Префикс установлен', 'success');
+                    }
+                } catch (error) {
+                    console.error('Ошибка установки префикса:', error);
+                    showNotification('Ошибка при установке префикса', 'error');
+                }
+            }
+        }
+
+        // Импорт данных
+        function showImportModal() {
+            document.getElementById('importModal').style.display = 'flex';
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('importTextarea').value = '';
+        }
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('importTextarea').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        async function importData() {
+            const content = document.getElementById('importTextarea').value;
+            
+            if (!content) {
+                showNotification('Пожалуйста, выберите файл или вставьте данные', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/sites/import`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`Импортировано: ${result.results.added} новых сайтов`, 'success');
+                    closeImportModal();
+                } else {
+                    showNotification('Ошибка при импорте данных', 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка импорта:', error);
+                showNotification('Ошибка при импорте данных', 'error');
+            }
+        }
+
+        // Управление префиксами
+        async function showPrefixModal() {
+            await loadPrefixes();
+            const manager = document.getElementById('prefixManager');
+            
+            manager.innerHTML = Object.entries(prefixes).map(([name, color]) => `
+                <div class="prefix-item">
+                    <input type="text" value="${name}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" 
+                           onchange="updatePrefixName('${name}', this.value)">
+                    <input type="color" value="${color}" class="color-picker" 
+                           onchange="updatePrefixColor('${name}', this.value)">
+                    <button class="action-btn btn-archive" onclick="deletePrefix('${name}')">Удалить</button>
+                </div>
+            `).join('');
+            
+            document.getElementById('prefixModal').style.display = 'flex';
+        }
+
+        function closePrefixModal() {
+            document.getElementById('prefixModal').style.display = 'none';
+        }
+
+        async function addNewPrefix() {
+            const name = prompt('Введите название префикса:');
+            if (name && !prefixes[name]) {
+                const color = '#' + Math.floor(Math.random()*16777215).toString(16);
+                
+                try {
+                    const response = await fetch(`${API_URL}/api/prefixes`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, color })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Префикс добавлен', 'success');
+                        showPrefixModal();
+                    }
+                } catch (error) {
+                    console.error('Ошибка добавления префикса:', error);
+                    showNotification('Ошибка при добавлении префикса', 'error');
+                }
+            }
+        }
+
+        async function updatePrefixName(oldName, newName) {
+            if (newName && oldName !== newName && !prefixes[newName]) {
+                try {
+                    const response = await fetch(`${API_URL}/api/prefixes/${oldName}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: newName, color: prefixes[oldName] })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Префикс обновлен', 'success');
+                        showPrefixModal();
+                    }
+                } catch (error) {
+                    console.error('Ошибка обновления префикса:', error);
+                    showNotification('Ошибка при обновлении префикса', 'error');
+                }
+            }
+        }
+
+        async function updatePrefixColor(name, color) {
+            try {
+                const response = await fetch(`${API_URL}/api/prefixes/${name}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, color })
+                });
+                
+                if (response.ok) {
+                    prefixes[name] = color;
+                    showNotification('Цвет префикса обновлен', 'success');
+                }
+            } catch (error) {
+                console.error('Ошибка обновления цвета:', error);
+                showNotification('Ошибка при обновлении цвета', 'error');
+            }
+        }
+
+        async function deletePrefix(name) {
+            if (confirm(`Удалить префикс "${name}"?`)) {
+                try {
+                    const response = await fetch(`${API_URL}/api/prefixes/${name}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Префикс удален', 'success');
+                        showPrefixModal();
+                    }
+                } catch (error) {
+                    console.error('Ошибка удаления префикса:', error);
+                    showNotification('Ошибка при удалении префикса', 'error');
+                }
+            }
+        }
+
+        // Уведомления
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Закрытие модалок по клику вне
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        // Инициализация приложения
+        async function initializeApp() {
+            initializeSocket();
+            await loadPrefixes();
+            await loadStats();
+            await loadSites();
+        }
+
+        // Запуск приложения
+        initializeApp();
+    </script>
+</body>
+</html>
