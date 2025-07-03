@@ -55,6 +55,11 @@ const siteSchema = new mongoose.Schema({
     modifiedBy: { type: String, default: 'system' }
 });
 
+// Индексы для производительности
+siteSchema.index({ status: 1 });
+siteSchema.index({ status: 1, dateAdded: -1 });
+siteSchema.index({ name: 'text', url: 'text' });
+
 const Site = mongoose.model('Site', siteSchema);
 
 // Схема префиксов
@@ -106,6 +111,11 @@ function notifyAllClients(event, data = {}) {
     io.emit(event, data);
 }
 
+// Кэш для статистики
+let statsCache = null;
+let statsCacheTime = 0;
+const STATS_CACHE_TTL = 5000; // 5 секунд
+
 // API маршруты
 
 // Главная страница
@@ -113,10 +123,120 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Получить все сайты
+// Оптимизированный endpoint для получения сайтов с пагинацией
+app.get('/api/sites/optimized', async (req, res) => {
+    try {
+        const { 
+            status = 'general', 
+            page = 1, 
+            limit = 50,
+            search = ''
+        } = req.query;
+        
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        
+        // Строим запрос
+        let query = { status };
+        
+        // Если есть поиск
+        if (search) {
+            query.$or = [
+                { siteId: isNaN(search) ? -1 : parseInt(search) },
+                { name: { $regex: search, $options: 'i' } },
+                { url: { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        // Получаем данные с пагинацией
+        const [sites, total] = await Promise.all([
+            Site.find(query)
+                .sort({ dateAdded: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(), // lean() для производительности
+            Site.countDocuments(query)
+        ]);
+        
+        res.json({
+            sites,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                pages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка в optimized endpoint:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Оптимизированная статистика (с кэшированием)
+app.get('/api/stats/cached', async (req, res) => {
+    try {
+        const now = Date.now();
+        
+        // Если кэш еще актуален
+        if (statsCache && (now - statsCacheTime) < STATS_CACHE_TTL) {
+            return res.json(statsCache);
+        }
+        
+        // Обновляем кэш
+        const stats = await Site.aggregate([
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        
+        const result = {
+            total: 0,
+            general: 0,
+            '2fa': 0,
+            good: 0,
+            archive: 0
+        };
+        
+        stats.forEach(stat => {
+            result[stat._id] = stat.count;
+            result.total += stat.count;
+        });
+        
+        statsCache = result;
+        statsCacheTime = now;
+        
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Минимальная загрузка для начального отображения
+app.get('/api/sites/initial', async (req, res) => {
+    try {
+        const limit = 50; // Только первые 50 для быстрой загрузки
+        
+        const sites = await Site.find({ status: 'general' })
+            .sort({ dateAdded: -1 })
+            .limit(limit)
+            .select('siteId name url status prefix comment credentials') // Только нужные поля
+            .lean();
+        
+        res.json(sites);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Получить все сайты (старый endpoint для совместимости)
 app.get('/api/sites', async (req, res) => {
     try {
-        const sites = await Site.find().sort({ dateAdded: -1 });
+        const sites = await Site.find().sort({ dateAdded: -1 }).lean();
         res.json(sites);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -127,37 +247,62 @@ app.get('/api/sites', async (req, res) => {
 app.post('/api/sites/import', async (req, res) => {
     try {
         const { content } = req.body;
-        const lines = content.split('\n');
         const results = { added: 0, duplicates: 0, errors: 0 };
         const newSites = [];
 
-        for (const line of lines) {
+        // Используем регулярное выражение для поиска всех институтов
+        const idPattern = /"id":(\d+),"name":"([^"]+)"/g;
+        const matches = [];
+        let match;
+        
+        while ((match = idPattern.exec(content)) !== null) {
+            matches.push({
+                id: parseInt(match[1]),
+                name: match[2]
+            });
+        }
+
+        // Проверяем уникальность по ID
+        const uniqueInstitutions = new Map();
+        matches.forEach(inst => {
+            if (!uniqueInstitutions.has(inst.id)) {
+                uniqueInstitutions.set(inst.id, inst);
+            }
+        });
+
+        // Импортируем институты
+        for (const inst of uniqueInstitutions.values()) {
             try {
-                // Ищем JSON объекты в строке
-                const jsonMatches = line.match(/\{[^}]+\}/g);
-                if (jsonMatches) {
-                    for (const jsonStr of jsonMatches) {
-                        try {
-                            const obj = JSON.parse(jsonStr);
-                            if (obj.institution && obj.institution.id) {
-                                const exists = await Site.findOne({ siteId: obj.institution.id });
-                                if (!exists) {
-                                    const newSite = new Site({
-                                        siteId: obj.institution.id,
-                                        name: obj.institution.name || 'Без названия',
-                                        url: obj.institution.urlLogonApp || obj.institution.urlHomeApp || ''
-                                    });
-                                    await newSite.save();
-                                    newSites.push(newSite);
-                                    results.added++;
-                                } else {
-                                    results.duplicates++;
-                                }
+                const exists = await Site.findOne({ siteId: inst.id });
+                if (!exists) {
+                    // Пытаемся найти URL
+                    const idIndex = content.indexOf(`"id":${inst.id},`);
+                    let url = '';
+                    
+                    if (idIndex !== -1) {
+                        const searchArea = content.substring(idIndex, Math.min(idIndex + 2000, content.length));
+                        const urlLogonMatch = searchArea.match(/"urlLogonApp":"([^"]+)"/);
+                        if (urlLogonMatch) {
+                            url = urlLogonMatch[1];
+                        } else {
+                            const urlHomeMatch = searchArea.match(/"urlHomeApp":"([^"]+)"/);
+                            if (urlHomeMatch) {
+                                url = urlHomeMatch[1];
                             }
-                        } catch (e) {
-                            results.errors++;
                         }
                     }
+
+                    const newSite = new Site({
+                        siteId: inst.id,
+                        name: inst.name,
+                        url: url
+                    });
+                    
+                    await newSite.save();
+                    newSites.push(newSite);
+                    results.added++;
+                } else {
+                    results.duplicates++;
                 }
             } catch (e) {
                 results.errors++;
@@ -166,6 +311,8 @@ app.post('/api/sites/import', async (req, res) => {
 
         if (newSites.length > 0) {
             notifyAllClients('sitesUpdated', { action: 'import', count: newSites.length });
+            // Сбрасываем кэш статистики
+            statsCache = null;
         }
 
         res.json({ 
@@ -197,6 +344,7 @@ app.put('/api/sites/:id', async (req, res) => {
         }
         
         notifyAllClients('siteUpdated', { site });
+        statsCache = null; // Сброс кэша
         res.json(site);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -221,6 +369,7 @@ app.put('/api/sites/:id/move', async (req, res) => {
         }
         
         notifyAllClients('siteUpdated', { site });
+        statsCache = null; // Сброс кэша
         res.json(site);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -370,29 +519,7 @@ app.delete('/api/prefixes/:name', async (req, res) => {
     }
 });
 
-// Оптимизированная загрузка по статусу
-app.get('/api/sites/by-status/:status', async (req, res) => {
-    try {
-        const { status } = req.params;
-        const limit = parseInt(req.query.limit) || 1000;
-        
-        const sites = await Site.find({ status })
-            .sort({ dateAdded: -1 })
-            .limit(limit)
-            .lean();
-        
-        const total = await Site.countDocuments({ status });
-        
-        res.json({
-            sites,
-            total
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Получить статистику
+// Получить статистику (старый endpoint)
 app.get('/api/stats', async (req, res) => {
     try {
         const stats = {
@@ -408,26 +535,19 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
-// Оптимизированная загрузка по статусу
-app.get('/api/sites/by-status/:status', async (req, res) => {
-    try {
-        const { status } = req.params;
-        const limit = parseInt(req.query.limit) || 1000;
-        
-        const sites = await Site.find({ status })
-            .sort({ dateAdded: -1 })
-            .limit(limit)
-            .lean();
-        
-        const total = await Site.countDocuments({ status });
-        
-        res.json({
-            sites,
-            total
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date(),
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
+
+// Обработка ошибок
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Что-то пошло не так!' });
 });
 
 // Запуск сервера

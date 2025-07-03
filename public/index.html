@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Менеджер сайтов</title>
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -12,92 +12,449 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-card: #1a1a1a;
+            --bg-hover: #242424;
+            --border-color: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --accent-primary: #6366f1;
+            --accent-secondary: #818cf8;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+            background: var(--bg-primary);
             min-height: 100vh;
-            color: #2c3e50;
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100vh;
+            background: radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
+            position: relative;
+            z-index: 1;
         }
 
         .header {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 40px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: var(--accent-gradient);
+            opacity: 0.05;
+            transform: rotate(45deg);
         }
 
         .header h1 {
-            color: #2c3e50;
-            font-size: 2.5em;
+            font-size: 3em;
+            font-weight: 900;
             margin-bottom: 10px;
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+            position: relative;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .status-connected {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-disconnected {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .action-card {
+            position: relative;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .action-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            opacity: 0.8;
+            transition: height 0.3s ease;
+        }
+
+        .action-card[data-color="purple"]::before {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+        }
+
+        .action-card[data-color="blue"]::before {
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+        }
+
+        .action-card[data-color="green"]::before {
+            background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+        }
+
+        .action-card[data-color="orange"]::before {
+            background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .action-card:hover::before {
+            height: 100%;
+            opacity: 0.1;
+        }
+
+        .action-icon {
+            font-size: 2em;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background: var(--bg-secondary);
+            flex-shrink: 0;
+        }
+
+        .action-card[data-color="purple"] .action-icon {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .action-card[data-color="blue"] .action-icon {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .action-card[data-color="green"] .action-icon {
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .action-card[data-color="orange"] .action-icon {
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .action-content {
+            flex: 1;
+        }
+
+        .action-content h4 {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .action-content p {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        .coming-soon {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2em;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            border-radius: 20px;
+        }
+
+        .action-card[data-color="purple"] .coming-soon {
+            color: #a855f7;
+            text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+        }
+
+        .action-card[data-color="blue"] .coming-soon {
+            color: #60a5fa;
+            text-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+        }
+
+        .action-card[data-color="green"] .coming-soon {
+            color: #34d399;
+            text-shadow: 0 0 20px rgba(52, 211, 153, 0.5);
+        }
+
+        .action-card[data-color="orange"] .coming-soon {
+            color: #fbbf24;
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+        }
+
+        .action-card:hover .coming-soon {
+            opacity: 1;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .prefix-filter {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .prefix-filter-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .prefix-filter-btn:hover {
+            border-color: var(--accent-primary);
+            background: var(--bg-hover);
+        }
+
+        .prefix-filter-btn.active {
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .prefix-filter-btn .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .prefix-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .prefix-dropdown-toggle {
+            padding: 10px 20px;
+            background: var(--info);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .prefix-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 8px;
+            min-width: 200px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            display: none;
+            z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .prefix-dropdown.open .prefix-dropdown-menu {
+            display: block;
+        }
+
+        .prefix-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .prefix-dropdown-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .prefix-dropdown-item .color-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .prefix-dropdown-item.no-prefix {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--shadow-md);
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-gradient);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            border-color: var(--accent-primary);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-card h3 {
+            font-size: 3em;
+            font-weight: 900;
+            margin-bottom: 5px;
+            background: linear-gradient(180deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.03em;
+            line-height: 1;
+        }
+
+        .stat-card.loading h3 {
+            background: linear-gradient(180deg, var(--text-muted) 0%, var(--border-color) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        .connection-status {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            margin-top: 10px;
-        }
-
-        .status-connected {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-disconnected {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .stats-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .stat-card h3 {
-            font-size: 2em;
-            margin-bottom: 5px;
-            color: #667eea;
-        }
-
         .stat-card p {
-            color: #7f8c8d;
-            font-size: 0.9em;
+            color: var(--text-secondary);
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
         }
 
         .controls {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--shadow-md);
             margin-bottom: 30px;
         }
 
@@ -110,163 +467,136 @@
 
         .search-input {
             flex: 1;
-            padding: 15px 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
             font-size: 16px;
+            color: var(--text-primary);
             transition: all 0.3s ease;
-            min-width: 250px;
+            min-width: 300px;
         }
 
         .search-input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            background: var(--bg-primary);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
         }
 
         .btn {
-            padding: 15px 30px;
+            padding: 16px 32px;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-weight: 600;
+            position: relative;
+            overflow: hidden;
         }
 
         .btn-primary {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            background: var(--accent-gradient);
             color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
         }
 
         .tabs {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             margin-bottom: 30px;
             flex-wrap: wrap;
+            background: var(--bg-card);
+            padding: 8px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
         }
 
         .tab {
-            padding: 12px 24px;
-            border-radius: 10px;
+            padding: 14px 28px;
+            border-radius: 12px;
             cursor: pointer;
-            background: white;
-            color: #7f8c8d;
+            background: transparent;
+            color: var(--text-secondary);
             font-weight: 600;
             transition: all 0.3s ease;
-            border: 2px solid transparent;
+            border: 1px solid transparent;
             position: relative;
         }
 
+        .tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
         .tab.active {
-            color: #667eea;
-            border-color: #667eea;
-            background: rgba(102, 126, 234, 0.1);
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            border-color: var(--border-color);
+            box-shadow: var(--shadow-sm);
         }
 
         .tab-badge {
             position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #e74c3c;
+            top: -10px;
+            right: -10px;
+            background: var(--accent-gradient);
             color: white;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
+            border-radius: 100px;
+            min-width: 28px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 0 8px;
+            box-shadow: var(--shadow-md);
         }
 
         .content {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            min-height: 400px;
-        }
-
-        /* Пагинация */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            margin-top: 30px;
-            flex-wrap: wrap;
-        }
-
-        .pagination-info {
-            color: #7f8c8d;
-            font-size: 0.9em;
-            margin: 0 15px;
-        }
-
-        .page-btn {
-            padding: 8px 12px;
-            border: 2px solid #e0e0e0;
-            background: white;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 600;
-            color: #7f8c8d;
-            min-width: 40px;
-            text-align: center;
-        }
-
-        .page-btn:hover:not(:disabled) {
-            border-color: #667eea;
-            color: #667eea;
-        }
-
-        .page-btn.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .page-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .page-size-selector {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #7f8c8d;
-            font-size: 0.9em;
-        }
-
-        .page-size-selector select {
-            padding: 6px 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            background: white;
-            cursor: pointer;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: var(--shadow-lg);
+            min-height: 500px;
         }
 
         .site-item {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 15px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
             transition: all 0.3s ease;
-            border: 2px solid transparent;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 0.4s ease;
         }
 
         @keyframes fadeIn {
             from {
                 opacity: 0;
-                transform: translateY(10px);
+                transform: translateY(20px);
             }
             to {
                 opacity: 1;
@@ -275,111 +605,198 @@
         }
 
         .site-item:hover {
-            border-color: #e0e0e0;
-            transform: translateX(5px);
+            border-color: var(--accent-primary);
+            background: var(--bg-hover);
+            transform: translateX(4px);
+            box-shadow: var(--shadow-md);
         }
 
         .site-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
             flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .site-info {
-            flex: 1;
+            gap: 12px;
         }
 
         .site-name {
-            font-size: 1.2em;
+            font-size: 1.3em;
             font-weight: 700;
-            color: #2c3e50;
-            margin-bottom: 5px;
+            color: var(--text-primary);
+            margin-bottom: 6px;
         }
 
         .site-id {
-            color: #7f8c8d;
+            color: var(--text-muted);
             font-size: 0.9em;
-            font-family: monospace;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
         }
 
         .site-url {
-            color: #3498db;
+            color: var(--accent-secondary);
             text-decoration: none;
-            font-size: 0.9em;
+            font-size: 0.95em;
             word-break: break-all;
+            transition: color 0.2s ease;
         }
 
         .site-url:hover {
+            color: var(--accent-primary);
             text-decoration: underline;
         }
 
         .prefix-badge {
-            display: inline-block;
-            padding: 5px 12px;
-            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 14px;
+            border-radius: 100px;
             font-size: 0.85em;
-            font-weight: 600;
-            margin-right: 5px;
+            font-weight: 700;
+            margin-right: 8px;
             color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: var(--shadow-sm);
         }
 
         .actions {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
-            margin-top: 15px;
+            margin-top: 16px;
         }
 
         .action-btn {
-            padding: 8px 16px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 14px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-weight: 500;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            transition: left 0.3s ease;
+        }
+
+        .action-btn:hover::before {
+            left: 100%;
         }
 
         .btn-comment {
-            background: #3498db;
-            color: white;
+            background: var(--info);
         }
 
         .btn-2fa {
-            background: #f39c12;
-            color: white;
+            background: var(--warning);
         }
 
         .btn-good {
-            background: #27ae60;
-            color: white;
+            background: var(--success);
         }
 
         .btn-archive {
-            background: #95a5a6;
-            color: white;
+            background: var(--text-muted);
         }
 
         .action-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
-        .comment-section {
-            margin-top: 15px;
-            padding: 15px;
-            background: #ecf0f1;
-            border-radius: 10px;
-        }
-
+        .comment-section,
         .credentials-section {
-            margin-top: 15px;
-            padding: 15px;
-            background: #ffeaa7;
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            font-size: 0.95em;
+        }
+
+        .comment-section strong,
+        .credentials-section strong {
+            color: var(--text-secondary);
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            padding: 10px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            min-width: 44px;
+            text-align: center;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: var(--bg-hover);
+        }
+
+        .page-btn.active {
+            background: var(--accent-gradient);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 0.95em;
+            margin: 0 16px;
+            font-weight: 500;
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-secondary);
+            font-size: 0.95em;
+        }
+
+        .page-size-selector select {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-weight: 500;
         }
 
         .modal {
@@ -389,117 +806,138 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
             z-index: 1000;
             justify-content: center;
             align-items: center;
         }
 
         .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-            max-width: 500px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            max-width: 600px;
             width: 90%;
-            max-height: 80vh;
+            max-height: 85vh;
             overflow-y: auto;
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
 
         .modal-header {
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
 
         .modal-header h2 {
-            color: #2c3e50;
+            font-size: 1.8em;
+            font-weight: 800;
+            color: var(--text-primary);
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            color: #555;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
             font-weight: 600;
+            font-size: 0.95em;
         }
 
         .form-group input,
         .form-group textarea {
             width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            padding: 14px 18px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
             font-size: 16px;
-            transition: border-color 0.3s ease;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
         }
 
         .form-group input:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            background: var(--bg-primary);
         }
 
         .form-group textarea {
             resize: vertical;
-            min-height: 100px;
+            min-height: 120px;
+            font-family: inherit;
         }
 
         .modal-actions {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             justify-content: flex-end;
-            margin-top: 20px;
-        }
-
-        .prefix-manager {
-            margin-top: 20px;
+            margin-top: 30px;
         }
 
         .prefix-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
         }
 
         .color-picker {
             width: 50px;
-            height: 40px;
+            height: 42px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
+            background: var(--bg-primary);
         }
 
         .empty-state {
             text-align: center;
-            padding: 60px;
-            color: #95a5a6;
+            padding: 80px;
+            color: var(--text-secondary);
         }
 
         .empty-state h3 {
-            font-size: 1.5em;
-            margin-bottom: 10px;
+            font-size: 1.6em;
+            margin-bottom: 12px;
+            color: var(--text-primary);
         }
 
         .loading {
             text-align: center;
-            padding: 40px;
-            color: #7f8c8d;
+            padding: 60px;
+            color: var(--text-secondary);
         }
 
         .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--accent-primary);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 48px;
+            height: 48px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 0 auto 24px;
         }
 
         @keyframes spin {
@@ -509,35 +947,80 @@
 
         .notification {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            top: 30px;
+            right: 30px;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
             animation: slideIn 0.3s ease;
             z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 400px;
         }
 
         @keyframes slideIn {
             from {
-                transform: translateX(100%);
+                transform: translateX(120%);
             }
             to {
                 transform: translateX(0);
             }
         }
 
-        .notification.success {
-            border-left: 4px solid #27ae60;
+        .notification::before {
+            content: '';
+            width: 4px;
+            height: 100%;
+            position: absolute;
+            left: 0;
+            top: 0;
+            border-radius: 12px 0 0 12px;
         }
 
-        .notification.error {
-            border-left: 4px solid #e74c3c;
+        .notification.success::before {
+            background: var(--success);
         }
 
-        .notification.info {
-            border-left: 4px solid #3498db;
+        .notification.error::before {
+            background: var(--danger);
+        }
+
+        .notification.info::before {
+            background: var(--info);
+        }
+
+        .loading-message {
+            margin-top: 12px;
+            font-size: 0.95em;
+            color: var(--text-muted);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Selection styling */
+        ::selection {
+            background: var(--accent-primary);
+            color: white;
         }
     </style>
 </head>
@@ -551,25 +1034,63 @@
             </div>
         </div>
 
+        <div class="quick-actions">
+            <div class="action-card" data-color="purple">
+                <div class="action-icon">📋</div>
+                <div class="action-content">
+                    <h4>Работа с запросами</h4>
+                    <p>Управление входящими запросами</p>
+                </div>
+                <div class="coming-soon">Coming Soon...</div>
+            </div>
+            
+            <div class="action-card" data-color="blue">
+                <div class="action-icon">🗄️</div>
+                <div class="action-content">
+                    <h4>Работа с базами</h4>
+                    <p>Управление базами данных</p>
+                </div>
+                <div class="coming-soon">Coming Soon...</div>
+            </div>
+            
+            <div class="action-card" data-color="green">
+                <div class="action-icon">💼</div>
+                <div class="action-content">
+                    <h4>Подработка</h4>
+                    <p>Дополнительные задания</p>
+                </div>
+                <div class="coming-soon">Coming Soon...</div>
+            </div>
+            
+            <div class="action-card" data-color="orange">
+                <div class="action-icon">✅</div>
+                <div class="action-content">
+                    <h4>Задания</h4>
+                    <p>Текущие и выполненные задачи</p>
+                </div>
+                <div class="coming-soon">Coming Soon...</div>
+            </div>
+        </div>
+
         <div class="stats-container">
-            <div class="stat-card">
-                <h3 id="totalCount">0</h3>
+            <div class="stat-card loading">
+                <h3 id="totalCount">...</h3>
                 <p>Всего сайтов</p>
             </div>
-            <div class="stat-card">
-                <h3 id="generalCount">0</h3>
+            <div class="stat-card loading">
+                <h3 id="generalCount">...</h3>
                 <p>Общий список</p>
             </div>
-            <div class="stat-card">
-                <h3 id="2faCount">0</h3>
+            <div class="stat-card loading">
+                <h3 id="2faCount">...</h3>
                 <p>С 2FA</p>
             </div>
-            <div class="stat-card">
-                <h3 id="goodCount">0</h3>
+            <div class="stat-card loading">
+                <h3 id="goodCount">...</h3>
                 <p>Хорошие сайты</p>
             </div>
-            <div class="stat-card">
-                <h3 id="archiveCount">0</h3>
+            <div class="stat-card loading">
+                <h3 id="archiveCount">...</h3>
                 <p>В архиве</p>
             </div>
         </div>
@@ -583,10 +1104,9 @@
             <div class="page-size-selector">
                 <label>Показывать по:</label>
                 <select id="pageSizeSelect" onchange="changePageSize()">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
+                    <option value="50" selected>50</option>
                     <option value="100">100</option>
+                    <option value="200">200</option>
                 </select>
                 <span>записей на странице</span>
             </div>
@@ -595,31 +1115,31 @@
         <div class="tabs">
             <div class="tab active" onclick="switchTab('general')">
                 Общий список
-                <span class="tab-badge" id="generalBadge">0</span>
+                <span class="tab-badge" id="generalBadge">...</span>
             </div>
             <div class="tab" onclick="switchTab('2fa')">
                 2FA
-                <span class="tab-badge" id="2faBadge">0</span>
+                <span class="tab-badge" id="2faBadge">...</span>
             </div>
             <div class="tab" onclick="switchTab('good')">
                 Хорошие сайты
-                <span class="tab-badge" id="goodBadge">0</span>
+                <span class="tab-badge" id="goodBadge">...</span>
             </div>
             <div class="tab" onclick="switchTab('archive')">
                 Архив
-                <span class="tab-badge" id="archiveBadge">0</span>
+                <span class="tab-badge" id="archiveBadge">...</span>
             </div>
         </div>
 
         <div class="content" id="content">
             <div class="loading">
                 <div class="spinner"></div>
-                <p>Загрузка данных...</p>
+                <p>Подключение к серверу...</p>
             </div>
         </div>
     </div>
 
-    <!-- Модальное окно для импорта -->
+    <!-- Модальные окна -->
     <div class="modal" id="importModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -637,15 +1157,12 @@
         </div>
     </div>
 
-    <!-- Модальное окно для префиксов -->
     <div class="modal" id="prefixModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Управление префиксами</h2>
             </div>
-            <div class="prefix-manager" id="prefixManager">
-                <!-- Префиксы будут добавлены через JS -->
-            </div>
+            <div class="prefix-manager" id="prefixManager"></div>
             <div class="modal-actions">
                 <button class="btn btn-primary" onclick="addNewPrefix()">Добавить префикс</button>
                 <button class="btn" onclick="closePrefixModal()">Закрыть</button>
@@ -653,7 +1170,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно для комментариев -->
     <div class="modal" id="commentModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -669,7 +1185,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно для учетных данных -->
     <div class="modal" id="credentialsModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -692,45 +1207,81 @@
 
     <script>
         // Глобальные переменные
-        let allSites = []; // Все сайты для текущей вкладки
-        let filteredSites = []; // Отфильтрованные сайты
+        let currentSites = [];
         let currentPage = 1;
-        let pageSize = 10;
+        let totalPages = 1;
+        let totalItems = 0;
+        let pageSize = 50;
         let prefixes = {};
         let currentTab = 'general';
         let searchTerm = '';
         let socket;
         let currentEditingSiteId = null;
         let API_URL = window.location.origin;
+        let isLoading = false;
+        let connectionRetries = 0;
 
-        // Инициализация Socket.IO
+        // Инициализация Socket.IO с улучшенной обработкой соединения
         function initializeSocket() {
-            socket = io();
+            socket = io({
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5,
+                timeout: 10000
+            });
 
             socket.on('connect', () => {
-                console.log('Подключено к серверу');
+                console.log('✅ Подключено к серверу');
                 updateConnectionStatus(true);
+                connectionRetries = 0;
+                
+                // Загружаем данные только при первом подключении
+                if (currentSites.length === 0) {
+                    loadInitialData();
+                }
             });
 
             socket.on('disconnect', () => {
-                console.log('Отключено от сервера');
+                console.log('❌ Отключено от сервера');
                 updateConnectionStatus(false);
             });
 
+            socket.on('connect_error', (error) => {
+                console.error('Ошибка подключения:', error.message);
+                connectionRetries++;
+                
+                if (connectionRetries > 3) {
+                    // После 3 попыток загружаем данные напрямую через HTTP
+                    console.log('⚠️ WebSocket недоступен, используем HTTP');
+                    loadInitialData();
+                }
+            });
+
             socket.on('sitesUpdated', () => {
-                console.log('Сайты обновлены');
-                loadSites();
+                console.log('📄 Сайты обновлены');
+                loadSites(false); // Не показываем загрузку
                 loadStats();
             });
 
             socket.on('siteUpdated', (data) => {
-                console.log('Сайт обновлен', data);
-                loadSites();
+                console.log('📝 Сайт обновлен', data);
+                // Обновляем локально для мгновенного отображения
+                if (data.site) {
+                    const index = currentSites.findIndex(s => s.siteId === data.site.siteId);
+                    if (index !== -1) {
+                        if (data.site.status === currentTab) {
+                            currentSites[index] = data.site;
+                        } else {
+                            currentSites.splice(index, 1);
+                        }
+                        updateDisplay();
+                    }
+                }
                 loadStats();
             });
 
             socket.on('prefixesUpdated', () => {
-                console.log('Префиксы обновлены');
+                console.log('🏷️ Префиксы обновлены');
                 loadPrefixes();
             });
         }
@@ -740,97 +1291,247 @@
             const status = document.getElementById('connectionStatus');
             if (connected) {
                 status.className = 'connection-status status-connected';
-                status.textContent = '✅ Подключено';
+                status.innerHTML = '● Подключено';
             } else {
                 status.className = 'connection-status status-disconnected';
-                status.textContent = '❌ Отключено';
+                status.innerHTML = '● Отключено';
             }
         }
 
-        // Загрузка сайтов с пагинацией
-        async function loadSites() {
+        // Загрузка начальных данных
+        async function loadInitialData() {
             try {
-                // Используем оптимизированный endpoint если доступен
-                const response = await fetch(`${API_URL}/api/sites/by-status/${currentTab}?limit=1000`);
+                // Параллельная загрузка только необходимых данных
+                await Promise.all([
+                    loadPrefixes(),
+                    loadStats()
+                ]);
                 
-                if (!response.ok) {
-                    // Fallback на старый endpoint
-                    const fallbackResponse = await fetch(`${API_URL}/api/sites`);
-                    const allData = await fallbackResponse.json();
-                    allSites = allData.filter(site => site.status === currentTab);
-                } else {
-                    const data = await response.json();
-                    allSites = data.sites || [];
+                // Загружаем первую страницу
+                await loadSites(true);
+                
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+                showNotification('Ошибка загрузки данных', 'error');
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <h3>Ошибка загрузки</h3>
+                        <p>Не удалось загрузить данные. Попробуйте обновить страницу.</p>
+                        <button class="btn btn-primary" onclick="location.reload()">Обновить</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Обновление сообщения загрузки
+        function updateLoadingMessage(message) {
+            const loadingEl = document.querySelector('.loading p');
+            if (loadingEl) {
+                loadingEl.textContent = message;
+            }
+        }
+
+        // Загрузка сайтов с пагинацией (ОПТИМИЗИРОВАННАЯ)
+        async function loadSites(showLoading = true) {
+            if (isLoading) return;
+            isLoading = true;
+
+            try {
+                if (showLoading && currentSites.length === 0) {
+                    document.getElementById('content').innerHTML = `
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Загрузка сайтов...</p>
+                            <div class="loading-message">Страница ${currentPage}</div>
+                        </div>
+                    `;
+                }
+
+                // Используем оптимизированный endpoint
+                const params = {
+                    status: currentTab,
+                    page: currentPage,
+                    limit: pageSize,
+                    search: searchTerm
+                };
+                
+                // Добавляем фильтр по префиксу для вкладки "Хорошие сайты"
+                if (currentTab === 'good' && selectedPrefix) {
+                    params.prefix = selectedPrefix;
                 }
                 
-                applyFiltersAndDisplay();
+                const url = `${API_URL}/api/sites/optimized?` + new URLSearchParams(params);
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    // Добавляем таймаут
+                    signal: AbortSignal.timeout(15000)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Обновляем данные
+                currentSites = data.sites || [];
+                totalItems = data.pagination?.total || 0;
+                totalPages = data.pagination?.pages || 1;
+                currentPage = data.pagination?.page || 1;
+                
+                updateDisplay();
+                
             } catch (error) {
                 console.error('Ошибка загрузки сайтов:', error);
-                showNotification('Ошибка загрузки данных', 'error');
+                
+                // Если оптимизированный endpoint не работает, пробуем обычный
+                if (error.message.includes('404')) {
+                    await loadSitesFallback();
+                } else {
+                    showNotification('Ошибка загрузки данных', 'error');
+                    document.getElementById('content').innerHTML = `
+                        <div class="empty-state">
+                            <h3>Ошибка загрузки</h3>
+                            <p>${error.message}</p>
+                            <button class="btn btn-primary" onclick="loadSites()">Попробовать снова</button>
+                        </div>
+                    `;
+                }
+            } finally {
+                isLoading = false;
             }
         }
 
-        // Применение фильтров и отображение
-        function applyFiltersAndDisplay() {
-            // Фильтрация по поиску
-            if (searchTerm) {
-                filteredSites = allSites.filter(site => 
-                    site.siteId.toString().includes(searchTerm) ||
-                    site.name.toLowerCase().includes(searchTerm) ||
-                    site.url.toLowerCase().includes(searchTerm)
-                );
-            } else {
-                filteredSites = [...allSites];
+        // Fallback загрузка для старого API
+        async function loadSitesFallback() {
+            try {
+                console.log('⚠️ Используем fallback загрузку');
+                
+                const response = await fetch(`${API_URL}/api/sites`);
+                const allSites = await response.json();
+                
+                // Фильтруем по статусу
+                let filtered = allSites.filter(site => site.status === currentTab);
+                
+                // Применяем поиск
+                if (searchTerm) {
+                    filtered = filtered.filter(site => 
+                        site.siteId.toString().includes(searchTerm) ||
+                        site.name.toLowerCase().includes(searchTerm) ||
+                        (site.url && site.url.toLowerCase().includes(searchTerm))
+                    );
+                }
+                
+                // Применяем фильтр по префиксу для хороших сайтов
+                if (currentTab === 'good' && selectedPrefix) {
+                    filtered = filtered.filter(site => site.prefix === selectedPrefix);
+                }
+                
+                // Эмулируем пагинацию
+                totalItems = filtered.length;
+                totalPages = Math.ceil(totalItems / pageSize);
+                const start = (currentPage - 1) * pageSize;
+                const end = start + pageSize;
+                currentSites = filtered.slice(start, end);
+                
+                updateDisplay();
+                
+            } catch (error) {
+                console.error('Ошибка fallback загрузки:', error);
+                throw error;
             }
-            
-            // Сброс на первую страницу при новом поиске
-            if (searchTerm !== '') {
-                currentPage = 1;
-            }
-            
-            updateDisplay();
         }
 
-        // Обновление отображения с пагинацией
+        // Обновление отображения
         function updateDisplay() {
             const content = document.getElementById('content');
             
-            if (filteredSites.length === 0) {
+            if (currentSites.length === 0 && !searchTerm) {
                 content.innerHTML = `
                     <div class="empty-state">
-                        <h3>${searchTerm ? 'Ничего не найдено' : 'Нет сайтов в этой категории'}</h3>
-                        <p>${searchTerm ? 'Попробуйте изменить критерии поиска' : 'Переместите сайты в эту категорию для отображения'}</p>
+                        <h3>Нет сайтов в этой категории</h3>
+                        <p>Переместите сайты в эту категорию для отображения</p>
                     </div>
                 `;
                 return;
             }
             
-            // Вычисляем пагинацию
-            const totalPages = Math.ceil(filteredSites.length / pageSize);
-            const startIndex = (currentPage - 1) * pageSize;
-            const endIndex = startIndex + pageSize;
-            const pageSites = filteredSites.slice(startIndex, endIndex);
+            if (currentSites.length === 0 && searchTerm) {
+                content.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Ничего не найдено</h3>
+                        <p>Попробуйте изменить критерии поиска</p>
+                    </div>
+                `;
+                return;
+            }
             
-            // Отображаем сайты
-            let html = pageSites.map(site => createSiteCard(site)).join('');
+            // Создаем HTML для сайтов
+            let html = '';
+            
+            // Добавляем фильтр по префиксам только для вкладки "Хорошие сайты"
+            if (currentTab === 'good' && Object.keys(prefixes).length > 0) {
+                html += createPrefixFilter();
+            }
+            
+            html += '<div class="sites-list">';
+            html += currentSites.map(site => createSiteCard(site)).join('');
+            html += '</div>';
             
             // Добавляем пагинацию
-            html += createPagination(totalPages, filteredSites.length);
+            if (totalPages > 1) {
+                html += createPagination();
+            }
             
             content.innerHTML = html;
         }
 
-        // Создание элементов пагинации
-        function createPagination(totalPages, totalItems) {
-            if (totalPages <= 1) return '';
+        // Создание фильтра по префиксам
+        function createPrefixFilter() {
+            let html = '<div class="prefix-filter">';
             
+            // Кнопка "Все"
+            html += `<button class="prefix-filter-btn ${!selectedPrefix ? 'active' : ''}" onclick="filterByPrefix(null)">
+                <span>Все префиксы</span>
+            </button>`;
+            
+            // Кнопки для каждого префикса
+            Object.entries(prefixes).forEach(([name, color]) => {
+                const count = currentSites.filter(s => s.prefix === name).length;
+                if (count > 0) {
+                    html += `<button class="prefix-filter-btn ${selectedPrefix === name ? 'active' : ''}" onclick="filterByPrefix('${name}')">
+                        <span class="color-dot" style="background: ${color}"></span>
+                        <span>${name} (${count})</span>
+                    </button>`;
+                }
+            });
+            
+            html += '</div>';
+            return html;
+        }
+
+        // Фильтрация по префиксу
+        let selectedPrefix = null;
+        function filterByPrefix(prefix) {
+            selectedPrefix = prefix;
+            currentPage = 1;
+            loadSites();
+        }
+
+        // Создание элементов пагинации
+        function createPagination() {
             let html = '<div class="pagination">';
             
             // Кнопка "Предыдущая"
             html += `<button class="page-btn" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>←</button>`;
             
             // Номера страниц
-            const maxButtons = 5;
+            const maxButtons = 7;
             let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
             let endPage = Math.min(totalPages, startPage + maxButtons - 1);
             
@@ -841,7 +1542,7 @@
             if (startPage > 1) {
                 html += `<button class="page-btn" onclick="changePage(1)">1</button>`;
                 if (startPage > 2) {
-                    html += `<span style="color: #7f8c8d;">...</span>`;
+                    html += `<span style="color: var(--text-muted);">...</span>`;
                 }
             }
             
@@ -851,7 +1552,7 @@
             
             if (endPage < totalPages) {
                 if (endPage < totalPages - 1) {
-                    html += `<span style="color: #7f8c8d;">...</span>`;
+                    html += `<span style="color: var(--text-muted);">...</span>`;
                 }
                 html += `<button class="page-btn" onclick="changePage(${totalPages})">${totalPages}</button>`;
             }
@@ -861,8 +1562,8 @@
             
             // Информация о записях
             const startItem = (currentPage - 1) * pageSize + 1;
-            const endItem = Math.min(currentPage * pageSize, totalItems);
-            html += `<div class="pagination-info">Показано ${startItem}-${endItem} из ${totalItems}</div>`;
+            const endItem = Math.min(currentPage * pageSize, startItem + currentSites.length - 1);
+            html += `<div class="pagination-info">Показано ${startItem}-${endItem} из ${totalItems.toLocaleString()}</div>`;
             
             html += '</div>';
             
@@ -871,10 +1572,9 @@
 
         // Изменение страницы
         function changePage(page) {
-            const totalPages = Math.ceil(filteredSites.length / pageSize);
-            if (page >= 1 && page <= totalPages) {
+            if (page >= 1 && page <= totalPages && page !== currentPage && !isLoading) {
                 currentPage = page;
-                updateDisplay();
+                loadSites();
                 // Прокручиваем к началу контента
                 document.querySelector('.content').scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
@@ -884,7 +1584,7 @@
         function changePageSize() {
             pageSize = parseInt(document.getElementById('pageSizeSelect').value);
             currentPage = 1;
-            updateDisplay();
+            loadSites();
         }
 
         // Загрузка префиксов
@@ -904,19 +1604,30 @@
         // Загрузка статистики
         async function loadStats() {
             try {
-                const response = await fetch(`${API_URL}/api/stats`);
+                // Пробуем кэшированный endpoint
+                let response = await fetch(`${API_URL}/api/stats/cached`);
+                if (!response.ok) {
+                    // Fallback на обычный
+                    response = await fetch(`${API_URL}/api/stats`);
+                }
+                
                 const stats = await response.json();
                 
-                document.getElementById('totalCount').textContent = stats.total;
-                document.getElementById('generalCount').textContent = stats.general;
-                document.getElementById('2faCount').textContent = stats['2fa'];
-                document.getElementById('goodCount').textContent = stats.good;
-                document.getElementById('archiveCount').textContent = stats.archive;
+                // Убираем класс loading
+                document.querySelectorAll('.stat-card').forEach(card => {
+                    card.classList.remove('loading');
+                });
                 
-                document.getElementById('generalBadge').textContent = stats.general;
-                document.getElementById('2faBadge').textContent = stats['2fa'];
-                document.getElementById('goodBadge').textContent = stats.good;
-                document.getElementById('archiveBadge').textContent = stats.archive;
+                document.getElementById('totalCount').textContent = stats.total.toLocaleString();
+                document.getElementById('generalCount').textContent = stats.general.toLocaleString();
+                document.getElementById('2faCount').textContent = stats['2fa'].toLocaleString();
+                document.getElementById('goodCount').textContent = stats.good.toLocaleString();
+                document.getElementById('archiveCount').textContent = stats.archive.toLocaleString();
+                
+                document.getElementById('generalBadge').textContent = stats.general > 999 ? '999+' : stats.general;
+                document.getElementById('2faBadge').textContent = stats['2fa'] > 999 ? '999+' : stats['2fa'];
+                document.getElementById('goodBadge').textContent = stats.good > 999 ? '999+' : stats.good;
+                document.getElementById('archiveBadge').textContent = stats.archive > 999 ? '999+' : stats.archive;
             } catch (error) {
                 console.error('Ошибка загрузки статистики:', error);
             }
@@ -924,9 +1635,12 @@
 
         // Переключение вкладок
         function switchTab(tab) {
+            if (tab === currentTab || isLoading) return;
+            
             currentTab = tab;
-            currentPage = 1; // Сброс на первую страницу
-            searchTerm = ''; // Очистка поиска
+            currentPage = 1;
+            searchTerm = '';
+            selectedPrefix = null; // Сбрасываем фильтр префиксов
             document.getElementById('searchInput').value = '';
             
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -938,15 +1652,15 @@
         // Поиск с debounce
         let searchTimeout;
         document.getElementById('searchInput').addEventListener('input', function(e) {
-            searchTerm = e.target.value.toLowerCase();
-            
-            // Отменяем предыдущий таймер
+            searchTerm = e.target.value.trim();
             clearTimeout(searchTimeout);
             
-            // Устанавливаем новый таймер
-            searchTimeout = setTimeout(() => {
-                applyFiltersAndDisplay();
-            }, 300); // Задержка 300мс
+            if (!searchTerm || searchTerm.length >= 2) {
+                searchTimeout = setTimeout(() => {
+                    currentPage = 1;
+                    loadSites();
+                }, 500);
+            }
         });
 
         // Создание карточки сайта
@@ -957,26 +1671,26 @@
             const commentHtml = site.comment ? 
                 `<div class="comment-section">
                     <strong>Комментарий модератора:</strong><br>
-                    ${site.comment}
+                    ${escapeHtml(site.comment)}
                 </div>` : '';
             
-            const credentialsHtml = (site.status === '2fa' && (site.credentials.login || site.credentials.password)) ? 
+            const credentialsHtml = (site.status === '2fa' && (site.credentials?.login || site.credentials?.password)) ? 
                 `<div class="credentials-section">
                     <strong>Тестовые данные:</strong><br>
-                    Логин: ${site.credentials.login || 'Не указан'}<br>
-                    Пароль: ${site.credentials.password || 'Не указан'}
+                    Логин: ${escapeHtml(site.credentials?.login || 'Не указан')}<br>
+                    Пароль: ${escapeHtml(site.credentials?.password || 'Не указан')}
                 </div>` : '';
             
             return `
-                <div class="site-item">
+                <div class="site-item" data-site-id="${site.siteId}">
                     <div class="site-header">
                         <div class="site-info">
                             <div class="site-name">
                                 ${prefixHtml}
-                                ${site.name}
+                                ${escapeHtml(site.name)}
                             </div>
                             <div class="site-id">ID: ${site.siteId}</div>
-                            ${site.url ? `<a href="${site.url}" target="_blank" class="site-url">${site.url}</a>` : ''}
+                            ${site.url ? `<a href="${escapeHtml(site.url)}" target="_blank" class="site-url">${escapeHtml(site.url)}</a>` : ''}
                         </div>
                     </div>
                     ${commentHtml}
@@ -991,7 +1705,12 @@
                         }
                         ${site.status !== 'good' ? 
                             `<button class="action-btn btn-good" onclick="moveSite(${site.siteId}, 'good')">Хороший сайт</button>` : 
-                            `<button class="action-btn btn-comment" onclick="selectPrefix(${site.siteId})">Добавить префикс</button>`
+                            `<div class="prefix-dropdown">
+                                <button class="action-btn btn-comment" onclick="togglePrefixDropdown(${site.siteId}, event)">
+                                    ${site.prefix ? 'Изменить' : 'Добавить'} префикс
+                                </button>
+                                <div class="prefix-dropdown-menu" id="prefixDropdown-${site.siteId}"></div>
+                            </div>`
                         }
                         ${site.status !== 'archive' ? 
                             `<button class="action-btn btn-archive" onclick="moveSite(${site.siteId}, 'archive')">В архив</button>` : 
@@ -1000,6 +1719,19 @@
                     </div>
                 </div>
             `;
+        }
+
+        // Функция для экранирования HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
         }
 
         // Перемещение сайта
@@ -1013,6 +1745,22 @@
                 
                 if (response.ok) {
                     showNotification('Сайт перемещен', 'success');
+                    
+                    // Удаляем элемент из DOM сразу
+                    const element = document.querySelector(`[data-site-id="${siteId}"]`);
+                    if (element) {
+                        element.style.animation = 'fadeOut 0.3s ease';
+                        setTimeout(() => {
+                            element.remove();
+                            // Обновляем массив
+                            currentSites = currentSites.filter(s => s.siteId !== siteId);
+                            // Если страница стала пустой, загружаем следующую
+                            if (currentSites.length === 0 && currentPage > 1) {
+                                currentPage--;
+                                loadSites();
+                            }
+                        }, 300);
+                    }
                 }
             } catch (error) {
                 console.error('Ошибка перемещения сайта:', error);
@@ -1023,7 +1771,7 @@
         // Работа с комментариями
         function showCommentModal(siteId) {
             currentEditingSiteId = siteId;
-            const site = allSites.find(s => s.siteId === siteId);
+            const site = currentSites.find(s => s.siteId === siteId);
             document.getElementById('commentTextarea').value = site?.comment || '';
             document.getElementById('commentModal').style.display = 'flex';
         }
@@ -1046,6 +1794,13 @@
                 if (response.ok) {
                     showNotification('Комментарий сохранен', 'success');
                     closeCommentModal();
+                    
+                    // Обновляем локально
+                    const site = currentSites.find(s => s.siteId === currentEditingSiteId);
+                    if (site) {
+                        site.comment = comment;
+                        updateDisplay();
+                    }
                 }
             } catch (error) {
                 console.error('Ошибка сохранения комментария:', error);
@@ -1056,7 +1811,7 @@
         // Работа с учетными данными
         function showCredentialsModal(siteId) {
             currentEditingSiteId = siteId;
-            const site = allSites.find(s => s.siteId === siteId);
+            const site = currentSites.find(s => s.siteId === siteId);
             document.getElementById('credentialsLogin').value = site?.credentials?.login || '';
             document.getElementById('credentialsPassword').value = site?.credentials?.password || '';
             document.getElementById('credentialsModal').style.display = 'flex';
@@ -1081,6 +1836,15 @@
                 if (response.ok) {
                     showNotification('Учетные данные сохранены', 'success');
                     closeCredentialsModal();
+                    
+                    // Обновляем локально
+                    const site = currentSites.find(s => s.siteId === currentEditingSiteId);
+                    if (site) {
+                        if (!site.credentials) site.credentials = {};
+                        site.credentials.login = login;
+                        site.credentials.password = password;
+                        updateDisplay();
+                    }
                 }
             } catch (error) {
                 console.error('Ошибка сохранения учетных данных:', error);
@@ -1088,10 +1852,104 @@
             }
         }
 
-        // Выбор префикса
+        // Новая функция для выпадающего списка префиксов
+        function togglePrefixDropdown(siteId, event) {
+            event.stopPropagation();
+            
+            // Закрываем все другие выпадающие списки
+            document.querySelectorAll('.prefix-dropdown').forEach(dropdown => {
+                if (!dropdown.contains(event.target)) {
+                    dropdown.classList.remove('open');
+                }
+            });
+            
+            const dropdown = event.target.closest('.prefix-dropdown');
+            const menu = document.getElementById(`prefixDropdown-${siteId}`);
+            
+            if (dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                return;
+            }
+            
+            // Создаем список префиксов
+            let html = '';
+            
+            // Опция "Без префикса"
+            html += `<div class="prefix-dropdown-item no-prefix" onclick="setPrefixForSite(${siteId}, '')">
+                <span>Без префикса</span>
+            </div>`;
+            
+            // Добавляем все доступные префиксы
+            Object.entries(prefixes).forEach(([name, color]) => {
+                html += `<div class="prefix-dropdown-item" onclick="setPrefixForSite(${siteId}, '${name}')">
+                    <span class="color-dot" style="background: ${color}"></span>
+                    <span>${name}</span>
+                </div>`;
+            });
+            
+            if (Object.keys(prefixes).length === 0) {
+                html += `<div class="prefix-dropdown-item" style="padding: 16px; text-align: center;">
+                    <span style="color: var(--text-secondary);">Нет доступных префиксов</span>
+                </div>`;
+                html += `<div class="prefix-dropdown-item" onclick="showPrefixModal()">
+                    <span style="color: var(--accent-primary);">+ Создать префикс</span>
+                </div>`;
+            }
+            
+            menu.innerHTML = html;
+            dropdown.classList.add('open');
+        }
+
+        // Установка префикса для сайта
+        async function setPrefixForSite(siteId, prefix) {
+            try {
+                const response = await fetch(`${API_URL}/api/sites/${siteId}/prefix`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prefix })
+                });
+                
+                if (response.ok) {
+                    showNotification(prefix ? 'Префикс установлен' : 'Префикс удален', 'success');
+                    
+                    // Обновляем локально
+                    const site = currentSites.find(s => s.siteId === siteId);
+                    if (site) {
+                        site.prefix = prefix;
+                        updateDisplay();
+                    }
+                    
+                    // Закрываем выпадающий список
+                    document.querySelectorAll('.prefix-dropdown').forEach(dropdown => {
+                        dropdown.classList.remove('open');
+                    });
+                }
+            } catch (error) {
+                console.error('Ошибка установки префикса:', error);
+                showNotification('Ошибка при установке префикса', 'error');
+            }
+        }
+
+        // Закрытие выпадающих списков при клике вне
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.prefix-dropdown')) {
+                document.querySelectorAll('.prefix-dropdown').forEach(dropdown => {
+                    dropdown.classList.remove('open');
+                });
+            }
+        });
+
+        // Выбор префикса (оставляем для совместимости, но больше не используется)
         async function selectPrefix(siteId) {
-            const site = allSites.find(s => s.siteId === siteId);
+            const site = currentSites.find(s => s.siteId === siteId);
             const prefixList = Object.keys(prefixes);
+            
+            if (prefixList.length === 0) {
+                showNotification('Сначала создайте префиксы', 'info');
+                showPrefixModal();
+                return;
+            }
+            
             const prefix = prompt(`Выберите префикс (${prefixList.join(', ')}):`, site?.prefix || '');
             
             if (prefix !== null) {
@@ -1104,6 +1962,12 @@
                     
                     if (response.ok) {
                         showNotification('Префикс установлен', 'success');
+                        
+                        // Обновляем локально
+                        if (site) {
+                            site.prefix = prefix;
+                            updateDisplay();
+                        }
                     }
                 } catch (error) {
                     console.error('Ошибка установки префикса:', error);
@@ -1143,6 +2007,10 @@
             }
             
             try {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = 'Импорт...';
+                
                 const response = await fetch(`${API_URL}/api/sites/import`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1160,6 +2028,10 @@
             } catch (error) {
                 console.error('Ошибка импорта:', error);
                 showNotification('Ошибка при импорте данных', 'error');
+            } finally {
+                const btn = event.target;
+                btn.disabled = false;
+                btn.textContent = 'Импортировать';
             }
         }
 
@@ -1170,13 +2042,13 @@
             
             manager.innerHTML = Object.entries(prefixes).map(([name, color]) => `
                 <div class="prefix-item">
-                    <input type="text" value="${name}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" 
+                    <input type="text" value="${name}" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);" 
                            onchange="updatePrefixName('${name}', this.value)">
                     <input type="color" value="${color}" class="color-picker" 
                            onchange="updatePrefixColor('${name}', this.value)">
                     <button class="action-btn btn-archive" onclick="deletePrefix('${name}')">Удалить</button>
                 </div>
-            `).join('');
+            `).join('') || '<p style="color: var(--text-secondary);">Префиксы не созданы</p>';
             
             document.getElementById('prefixModal').style.display = 'flex';
         }
@@ -1188,7 +2060,7 @@
         async function addNewPrefix() {
             const name = prompt('Введите название префикса:');
             if (name && !prefixes[name]) {
-                const color = '#' + Math.floor(Math.random()*16777215).toString(16);
+                const color = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
                 
                 try {
                     const response = await fetch(`${API_URL}/api/prefixes`, {
@@ -1239,6 +2111,7 @@
                 if (response.ok) {
                     prefixes[name] = color;
                     showNotification('Цвет префикса обновлен', 'success');
+                    updateDisplay();
                 }
             } catch (error) {
                 console.error('Ошибка обновления цвета:', error);
@@ -1266,13 +2139,17 @@
 
         // Уведомления
         function showNotification(message, type = 'info') {
+            // Удаляем старые уведомления
+            document.querySelectorAll('.notification').forEach(n => n.remove());
+            
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             notification.textContent = message;
             document.body.appendChild(notification);
             
             setTimeout(() => {
-                notification.remove();
+                notification.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
             }, 3000);
         }
 
@@ -1283,16 +2160,19 @@
             }
         }
 
-        // Инициализация приложения
-        async function initializeApp() {
-            initializeSocket();
-            await loadPrefixes();
-            await loadStats();
-            await loadSites();
-        }
+        // Добавляем стиль для fadeOut
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeOut {
+                from { opacity: 1; transform: translateY(0); }
+                to { opacity: 0; transform: translateY(-10px); }
+            }
+        `;
+        document.head.appendChild(style);
 
         // Запуск приложения
-        initializeApp();
+        console.log('🚀 Запуск приложения...');
+        initializeSocket();
     </script>
 </body>
 </html>
